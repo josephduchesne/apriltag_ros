@@ -82,18 +82,24 @@ private:
     std::unordered_map<int, std::string> tag_frames;
     std::unordered_map<int, double> tag_sizes;
 
+    sensor_msgs::msg::CameraInfo::ConstSharedPtr camera_info_;
+
     std::function<void(apriltag_family_t*)> tf_destructor;
 
-    // const image_transport::CameraSubscriber sub_cam;
-    image_transport::SubscriberFilter image_subscriber_;
-    // Message filters subscriber for camera info
-    message_filters::Subscriber<sensor_msgs::msg::CameraInfo> camera_info_subscriber_;
-    // Synchronizer
-    using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
-    using Synchronizer = message_filters::Synchronizer<SyncPolicy>;
-    std::shared_ptr<Synchronizer> synchronizer_;
+    // const image_transport::CameraSubscriber sub_image_;
 
-    const image_transport::CameraSubscriber sub_cam;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_image_;
+    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr sub_image_era_info_;
+    // image_transport::SubscriberFilter image_subscriber_;
+    // Message filters subscriber for camera info
+    // message_filters::Subscriber<sensor_msgs::msg::CameraInfo> camera_info_subscriber_;
+    // Synchronizer
+    // using SyncPolicy = message_filters::sync_policies::ApproximateTime<sensor_msgs::msg::Image, sensor_msgs::msg::CameraInfo>;
+    // using Synchronizer = message_filters::Synchronizer<SyncPolicy>;
+
+    // std::shared_ptr<Synchronizer> synchronizer_;
+
+    // const image_transport::CameraSubscriber sub_image_;
     const rclcpp::Publisher<apriltag_msgs::msg::AprilTagDetectionArray>::SharedPtr pub_detections;
     tf2_ros::TransformBroadcaster tf_broadcaster;
 
@@ -115,7 +121,7 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     cb_parameter(add_on_set_parameters_callback(std::bind(&AprilTagNode::onParameter, this, std::placeholders::_1))),
     td(apriltag_detector_create()),
     // topics
-    // sub_cam(image_transport::create_camera_subscription(
+    // sub_image_(image_transport::create_camera_subscription(
     //     this,
     //     this->get_node_topics_interface()->resolve_topic_name("image_rect"),
     //     std::bind(&AprilTagNode::onCamera, this, std::placeholders::_1, std::placeholders::_2),
@@ -124,10 +130,29 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     pub_detections(create_publisher<apriltag_msgs::msg::AprilTagDetectionArray>("detections", rclcpp::QoS(1))),
     tf_broadcaster(this)
 {
-    image_subscriber_.subscribe(this, declare_parameter("image_rect", "raw", descr({}, true)), "raw", rclcpp::SensorDataQoS().get_rmw_qos_profile());
-    camera_info_subscriber_.subscribe(this, declare_parameter("camera_info", "raw", descr({}, true)));
-    synchronizer_ = std::make_shared<Synchronizer>(SyncPolicy(10), image_subscriber_, camera_info_subscriber_);
-    synchronizer_->registerCallback(std::bind(&AprilTagNode::onCamera, this, std::placeholders::_1, std::placeholders::_2));
+    sub_image_ = create_subscription<sensor_msgs::msg::Image>(
+        "image_rect",
+        rclcpp::SensorDataQoS(),
+        [this](const sensor_msgs::msg::Image::ConstSharedPtr& msg_img) {
+            // check if camera info is available
+            if(!camera_info_) {
+                RCLCPP_WARN_STREAM(get_logger(), "Camera info not available yet, skipping image processing.");
+                return;
+            }
+            onCamera(msg_img, camera_info_);
+        });
+
+    // image_subscriber_.subscribe(this, declare_parameter("image_rect", "raw", descr({}, true)), "raw", rclcpp::SensorDataQoS().get_rmw_qos_profile());
+    sub_image_era_info_ = create_subscription<sensor_msgs::msg::CameraInfo>(
+        "camera_info",
+        rclcpp::SensorDataQoS(),
+        [this](const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg) {
+            // store camera info for later use
+            camera_info_ = msg;
+        });
+    // camera_info_subscriber_.subscribe(this, declare_parameter("camera_info", "raw", descr({}, true)));
+    // synchronizer_ = std::make_shared<Synchronizer>(SyncPolicy(10), image_subscriber_, camera_info_subscriber_);
+    // synchronizer_->registerCallback(std::bind(&AprilTagNode::onCamera, this, std::placeholders::_1, std::placeholders::_2));
 
     // read-only parameters
     const std::string tag_family = declare_parameter("family", "36h11", descr("tag family", true));
