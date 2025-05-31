@@ -129,10 +129,12 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     //     rmw_qos_profile_sensor_data)),
     pub_detections(create_publisher<apriltag_msgs::msg::AprilTagDetectionArray>("detections", rclcpp::QoS(1))),
     tf_broadcaster(this)
-{
+{    
+    auto qos = rclcpp::SensorDataQoS(rclcpp::KeepLast(1));
+    
     sub_image_ = create_subscription<sensor_msgs::msg::Image>(
         "image_rect",
-        rclcpp::SensorDataQoS(),
+        qos,
         [this](const sensor_msgs::msg::Image::ConstSharedPtr& msg_img) {
             // check if camera info is available
             if(!camera_info_) {
@@ -145,7 +147,7 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
     // image_subscriber_.subscribe(this, declare_parameter("image_rect", "raw", descr({}, true)), "raw", rclcpp::SensorDataQoS().get_rmw_qos_profile());
     sub_image_era_info_ = create_subscription<sensor_msgs::msg::CameraInfo>(
         "camera_info",
-        rclcpp::SensorDataQoS(),
+        qos,
         [this](const sensor_msgs::msg::CameraInfo::ConstSharedPtr& msg) {
             // store camera info for later use
             camera_info_ = msg;
