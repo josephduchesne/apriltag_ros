@@ -192,6 +192,9 @@ AprilTagNode::AprilTagNode(const rclcpp::NodeOptions& options)
             const std::string prefix = "tag_bundles." + bundle_name + "." + std::to_string(id);
             bundle->id_to_size[id] = declare_parameter(prefix + ".size", 1.0, descr("bundle size", true));
             bundle->id_to_tf[id] = declare_parameter(prefix + ".transform", std::vector<double>{}, descr("bundle transform", true));
+            if(bundle->id_to_tf[id].size() != 7) {
+                throw std::runtime_error("Invalid transform size for tag id " + std::to_string(id));
+            }
         }
         all_tag_bundles.push_back(bundle);
     }
