@@ -66,28 +66,14 @@ pnp(apriltag_detection_t* const detection, const std::array<double, 4>& intr, do
 geometry_msgs::msg::Transform
 pnp_bundle(std::vector<apriltag_detection_t*> detections,
            const std::array<double, 4>& intr,
-           std::unordered_map<int, double> tagsizes,
-           std::unordered_map<int, std::vector<double>> transforms)
+           const std::unordered_map<int, std::array<cv::Point3d, 4>>& id_to_corners)
 {
     std::vector<cv::Point3d> objectPoints;
     std::vector<cv::Point2d> imagePoints;
 
     for(const apriltag_detection_t* detection : detections) {
-        const int id = detection->id;
-        const double s = tagsizes[id] / 2;
-        const std::vector<double> tf = transforms[id];
-
-        const std::vector<Eigen::Vector3d> corners = {
-            Eigen::Vector3d(-s, -s, 0),
-            Eigen::Vector3d(+s, -s, 0),
-            Eigen::Vector3d(+s, +s, 0),
-            Eigen::Vector3d(-s, +s, 0)};
-
-        const Eigen::Affine3d transform = Eigen::Translation3d(tf[0], tf[1], tf[2]) * Eigen::Quaterniond(tf[3], tf[4], tf[5], tf[6]);
-
-        for(const Eigen::Vector3d& point : corners) {
-            const Eigen::Vector3d transformed_point = transform * point;
-            objectPoints.push_back(cv::Point3d(transformed_point.x(), transformed_point.y(), transformed_point.z()));
+        for(const cv::Point3d& point : id_to_corners.at(detection->id)) {
+            objectPoints.push_back(point);
         }
         // Add image points
         for(int i = 0; i < 4; i++) {
